@@ -387,7 +387,7 @@ buttonFetch.addEventListener('clicked', async () => {
             }
 
             await sleep(WAIT_TIME);
-        }while(beatmapsError != null)       
+        }while(!Array.isArray(beatmaps) || beatmapsError != null);
 
         beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
 
