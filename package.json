@@ -1,0 +1,21 @@
+{
+  "name": "score-fetcher",
+  "version": "1.0.0",
+  "description": "fetch user scores and output as json or csv",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "./node_modules/.bin/qode --inspect ./src/index",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "LeaPhant",
+  "license": "MIT",
+  "dependencies": {
+    "@nodegui/nodegui": "^0.30.2",
+    "axios": "^0.21.1",
+    "node-fetch": "^2.6.1"
+  },
+  "devDependencies": {
+    "@nodegui/packer": "^1.4.1"
+  }
+}
