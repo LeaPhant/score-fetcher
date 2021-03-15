@@ -388,6 +388,10 @@ buttonFetch.addEventListener('clicked', async () => {
         buttonExportCsv.setEnabled(true);
     }
 
+    while (scores.length) {
+        scores.pop();
+    }
+
     let score = {};
 
     for(const [index, beatmapId] of beatmapIds.entries()){
