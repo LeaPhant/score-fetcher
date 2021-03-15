@@ -1,6 +1,7 @@
 import nodegui from '@nodegui/nodegui';
 import fetch from 'node-fetch';
 import { promises as fs } from 'fs';
+import AbortController from 'abort-controller';
 
 const { 
     QMainWindow,
@@ -20,7 +21,7 @@ const {
     EchoMode
 } = nodegui;
 
-const WAIT_TIME = 500;
+let WAIT_TIME = 500;
 
 const config = {
     CLIENT_ID: 0,
@@ -46,6 +47,8 @@ const sleep = ms => {
 };
 
 const apiRequest = async url => {
+    const controller = new AbortController();
+
     const requestConfig = {
         method: 'get',
         headers: {
@@ -53,9 +56,19 @@ const apiRequest = async url => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${TOKEN}`
         },
+        signal: controller.signal
     };
 
+    let timeout;
+
+    timeout = setTimeout(() => {
+        controller.abort();
+    }, 5000);
+
     let response = await fetch(url, requestConfig);
+
+    clearTimeout(timeout);
+
     let json = await response.json();
 
     if (json.authentication == 'basic') {
@@ -66,7 +79,14 @@ const apiRequest = async url => {
 
     requestConfig.headers['Authorization'] = `Bearer ${TOKEN}`;
 
+    timeout = setTimeout(() => {
+        controller.abort();
+    }, 5000);
+
     response = await fetch(url, requestConfig);
+
+    clearTimeout(timeout);
+
     json = await response.json();
 
     return json;
@@ -354,7 +374,18 @@ buttonFetch.addEventListener('clicked', async () => {
     buttonFetch.setEnabled(false);
     buttonCancel.setEnabled(true);
 
-    const user = await apiRequest(`https://osu.ppy.sh/api/v2/users/${inputUsername.text()}`);
+    let user;
+
+    try{
+        user = await apiRequest(`https://osu.ppy.sh/api/v2/users/${inputUsername.text()}`);
+    }catch(e){
+        console.error(e);
+
+        buttonFetch.setEnabled(true);
+        buttonCancel.setEnabled(false);
+
+        return;
+    }
 
     const { id } = user;
 
@@ -569,6 +600,10 @@ win.show();
 fs.readFile('./config.json', 'utf8')
 .then(configFile => {
     Object.assign(config, JSON.parse(configFile));
+
+    if (!isNaN(config.WAIT_TIME)) {
+        WAIT_TIME = config.WAIT_TIME;
+    }
 }).catch(error => {
     console.error(error);
 
