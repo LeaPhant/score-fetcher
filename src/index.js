@@ -377,7 +377,7 @@ buttonFetch.addEventListener('clicked', async () => {
 
                 if (beatmaps.error) {
                     beatmapsError = beatmaps.error;
-                    
+
                     console.error(beatmaps.error);
                 }
             }catch(e){
@@ -385,6 +385,8 @@ buttonFetch.addEventListener('clicked', async () => {
                 
                 beatmapsError = e.toString();
             }
+
+            await sleep(WAIT_TIME);
         }while(beatmapsError != null)       
 
         beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
@@ -392,8 +394,6 @@ buttonFetch.addEventListener('clicked', async () => {
         offset += limit;
 
         progress.setFormat(`0 / ${beatmapIds.length.toLocaleString()} beatmaps`);
-
-        await sleep(WAIT_TIME);
     }while(beatmaps.length > 0);
 
     if (!cancelFetch) {
