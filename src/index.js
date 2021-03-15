@@ -362,14 +362,30 @@ buttonFetch.addEventListener('clicked', async () => {
     const limit = 50;
 
     let offset = 0;
-    let beatmaps;
+    let beatmaps, beatmapsError;
 
     do{
         if (cancelFetch) {
             break;
         }
 
-        beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${id}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
+        beatmapsError = null;
+
+        do{
+            try{
+                beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${id}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
+
+                if (beatmaps.error) {
+                    beatmapsError = beatmaps.error;
+                    
+                    console.error(beatmaps.error);
+                }
+            }catch(e){
+                console.error(e);
+                
+                beatmapsError = e.toString();
+            }
+        }while(beatmapsError != null)       
 
         beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
 
@@ -402,7 +418,13 @@ buttonFetch.addEventListener('clicked', async () => {
         do{
             try{
                 score = await apiRequest(`https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/scores/users/${id}`);
+
+                if (score.error) {
+                    console.error(score.error);
+                }
             }catch(e){
+                console.error(e);
+
                 score.error = e.toString();
             }
 
