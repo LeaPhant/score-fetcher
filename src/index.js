@@ -1,7 +1,10 @@
 import nodegui from '@nodegui/nodegui';
-import fetch from 'node-fetch';
+import nodeFetch from 'node-fetch';
 import { promises as fs } from 'fs';
-import AbortController from 'abort-controller';
+
+import fetchRetry from '@vercel/fetch-retry';
+
+const fetch = fetchRetry(nodeFetch);
 
 const { 
     QMainWindow,
@@ -86,7 +89,7 @@ const modsEnumToArray = number => {
     for (const mod in MODS_ENUM) {
         const modValue = MODS_ENUM[mod];
 
-        if (number & modValue == modValue) {
+        if ((number & modValue) == modValue) {
             output.push(mod);
         }
     }
@@ -132,27 +135,16 @@ const sleep = ms => {
 };
 
 const apiRequest = async url => {
-    const controller = new AbortController();
-
     const requestConfig = {
         method: 'get',
         headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${TOKEN}`
-        },
-        signal: controller.signal
+        }
     };
 
-    let timeout;
-
-    timeout = setTimeout(() => {
-        controller.abort();
-    }, 5000);
-
     let response = await fetch(url, requestConfig);
-
-    clearTimeout(timeout);
 
     let json = await response.json();
 
@@ -164,13 +156,7 @@ const apiRequest = async url => {
 
     requestConfig.headers['Authorization'] = `Bearer ${TOKEN}`;
 
-    timeout = setTimeout(() => {
-        controller.abort();
-    }, 5000);
-
     response = await fetch(url, requestConfig);
-
-    clearTimeout(timeout);
 
     json = await response.json();
 
@@ -600,54 +586,49 @@ buttonFetch.addEventListener('clicked', async () => {
         scores.pop();
     }
 
-    let score = {};
+    let beatmapsProcessed = 0;
 
-    for(const [index, beatmapId] of beatmapIds.entries()){
+    for (const beatmapId of beatmapIds) {
         if (cancelFetch) {
             break;
         }
 
+        let score = {};
+
         if (inputApiVersion.currentText() == 'v2') {
-            do{
-                const timeStart = Date.now();
+            apiRequest(`https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/scores/users/${userId}`)
+            .then(response => {
+                score = response;
 
-                try {
-                    score = await apiRequest(`https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/scores/users/${userId}`);
-
-                    if (score.error) {
-                        console.error(score.error);
-                    }
-                } catch(e) {
-                    console.error(e);
-
-                    score.error = e.toString();
+                if (score.error) {
+                    console.error(score.error);
                 }
 
-                const timeTaken = Date.now() - timeStart;
-                const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
-
-                if (sleepTime > 0) {
-                    await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
+                if (score.score != null) {
+                    score.score.enabled_mods = modsArrayToEnum(score.score.mods); 
                 }
-            }while(score.error != null);
-        
-            if (score.score != null) {
-                score.score.enabled_mods = modsArrayToEnum(score.score.mods);
-            }
 
-            score.apiVersion = 2;
+                score.apiVersion = 2;
+
+                if (score.score != null) {
+                    scores.push(score);
+                }
+            }).catch(e => {
+                console.error(e);
+                
+                score.error = e.toString();
+            }).finally(() => {
+                beatmapsProcessed++;
+
+                progress.setFormat(`${beatmapsProcessed.toLocaleString()} / ${beatmapIds.length.toLocaleString()} beatmaps`);
+                progress.setValue(Math.max(progress.value(), beatmapsProcessed));
+            });
         } else {
-            do{
-                const timeStart = Date.now();
-
+            Promise.all([
+                fetch(`https://osu.ppy.sh/api/get_scores?k=${config.API_KEY}&b=${beatmapId}&u=${userId}&limit=1`),
+                fetch(`${config.BEATMAP_API_BASE}/b/${beatmapId}`)
+            ]).then(async response => {
                 try {
-                    const response = await Promise.all([
-                        fetch(`https://osu.ppy.sh/api/get_scores?k=${config.API_KEY}&b=${beatmapId}&u=${userId}&limit=1`),
-                        fetch(`${config.BEATMAP_API_BASE}/b/${beatmapId}`)
-                    ]);
-
-                    score = {};
-
                     const scoreJson = await response[0].json();
                     const beatmapJson = await response[1].json();
 
@@ -656,37 +637,36 @@ buttonFetch.addEventListener('clicked', async () => {
                     if (Array.isArray(scoreJson) && scoreJson.length > 0) {
                         score.score.beatmap = beatmapJson.beatmap;
                     }
+
+                    if (score.score != null) {
+                        score.score.mods = modsEnumToArray(Number(score.score.enabled_mods));
+                    }
+        
+                    score.apiVersion = 1;
+
+                    if (score.score != null) {
+                        scores.push(score);
+                    }
                 } catch(e) {
                     console.error(e);
-
-                    score.error = e.toString();
                 }
+            }).catch(e => {
+                console.error(e);
 
-                const timeTaken = Date.now() - timeStart;
-                const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
+                score.error = e.toString();
+            }).finally(() => {
+                beatmapsProcessed++;
 
-                if (sleepTime > 0) {
-                    await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
-                }
-            }while(score.error != null);
-
-            if (score.score != null) {
-                score.score.mods = modsEnumToArray(Number(score.score.enabled_mods));
-            }
-
-            score.apiVersion = 1;
+                progress.setFormat(`${beatmapsProcessed.toLocaleString()} / ${beatmapIds.length.toLocaleString()} beatmaps`);
+                progress.setValue(Math.max(progress.value(), beatmapsProcessed));
+            });
         }
 
         if (cancelFetch) {
             break;
         }
 
-        if (score.score != null) {
-            scores.push(score);
-        }
-
-        progress.setFormat(`${scores.length.toLocaleString()} / ${beatmapIds.length.toLocaleString()} beatmaps`);
-        progress.setValue(index + 1);
+        await sleep(60000 / inputRequests.value());
     }
 
     buttonFetch.setEnabled(true);
