@@ -20,6 +20,7 @@ const {
     CheckState,
     QPushButton,
     QProgressBar,
+    QStatusBar,
     QFileDialog,
     QSpinBox,
     FileMode,
@@ -467,10 +468,14 @@ rootView.layout.addWidget(fieldset);
 const rootStyleSheet = `
   #rootView {
     padding: 5px;
+    flex-direction: column;
   }
   
   #fieldset {
     padding: 5px;
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 1;
   }
   
   #usernameRow, #buttonsRow, #exportButtonsRow, #requestsRow, #apiVersionRow {
@@ -495,6 +500,8 @@ const rootStyleSheet = `
 
   #listExportColumns {
     margin-top: 5px;
+    flex-grow: 1;
+    flex-shrink: 1;
   }
 
   #buttonCancel, #buttonSave, #buttonExportCsv, #buttonExportJson {
@@ -860,6 +867,7 @@ rootView.setStyleSheet(rootStyleSheet);
 const win = new QMainWindow();
 win.setWindowTitle("Score Fetcher");
 win.setCentralWidget(rootView);
+win.setMinimumSize(250, 350);
 win.show();
 
 fs.readFile('./config.json', 'utf8')
