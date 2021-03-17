@@ -12,28 +12,113 @@ const {
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QComboBox,
     ItemFlag,
     CheckState,
     QPushButton,
     QProgressBar,
     QFileDialog,
+    QSpinBox,
     FileMode,
     EchoMode
 } = nodegui;
 
-let WAIT_TIME = 500;
-
 const config = {
     CLIENT_ID: 0,
-    CLIENT_SECRET: ""
+    CLIENT_SECRET: "",
+    API_KEY: "",
+    BEATMAP_API_BASE: "https://osu.lea.moe"
 };
 
 const scores = [];
 
 const columns = [
-    "Date","Score ID","User ID","Beatmapset ID","Beatmap ID","Ranked State","AR","CS","OD","HP","BPM","Version","Length",
-    "Star Rating","Mods","Rank","Position","Score","Combo","FC","Accuracy","300","100","50","Miss","PP","Replay"
+    "Date","Score ID","User ID","Beatmapset ID","Beatmap ID","Ranked State","AR","CS","OD","HP","BPM","Version","Hit Length",
+    "Star Rating","Mods Array","Mods Enum","Rank","Position","Score","Combo","FC","Accuracy","300","100","50","Miss","PP","Replay"
 ];
+
+const RANKED_STATE = {
+    '-2': 'graveyard',
+    '-1': 'WIP',
+    '0': 'pending',
+    '1': 'ranked',
+    "2": 'approved',
+    '3': 'qualified',
+    '4': 'loved'
+};
+
+const MODS_ENUM = {
+    ''    : 0,
+    'NF'  : 1,
+    'EZ'  : 2,
+    'TD'  : 4,
+    'HD'  : 8,
+    'HR'  : 16,
+    'SD'  : 32,
+    'DT'  : 64,
+    'RX'  : 128,
+    'HT'  : 256,
+    'NC'  : 512,
+    'FL'  : 1024,
+    'AT'  : 2048,
+    'SO'  : 4096,
+    'AP'  : 8192,
+    'PF'  : 16384,
+    '4K'  : 32768,
+    '5K'  : 65536,
+    '6K'  : 131072,
+    '7K'  : 262144,
+    '8K'  : 524288,
+    'FI'  : 1048576,
+    'RD'  : 2097152,
+    'LM'  : 4194304,
+    '9K'  : 16777216,
+    '10K' : 33554432,
+    '1K'  : 67108864,
+    '3K'  : 134217728,
+    '2K'  : 268435456,
+    'V2'  : 536870912,
+};
+
+const modsEnumToArray = number => {
+    const output = [];
+
+    for (const mod in MODS_ENUM) {
+        const modValue = MODS_ENUM[mod];
+
+        if (number & modValue == modValue) {
+            output.push(mod);
+        }
+    }
+
+    return output;
+};
+
+const modsArrayToEnum = array => {
+    let output = 0;
+
+    for (const mod of array) {
+        if (Object.keys(MODS_ENUM).includes(mod)) {
+            output |= MODS_ENUM[mod];
+        }
+    }
+
+    return output;
+};
+
+const accuracy = (count50, count100, count300, countmiss) => {
+    count50 = Number(count50);
+    count100 = Number(count100);
+    count300 = Number(count300);
+    countmiss = Number(countmiss);
+
+    const acc = 
+    (50 * count50 + 100 * count100 + 300 * count300)
+    / (300 * count50 + 300 * count100 + 300 * count300 + 300 * countmiss)
+    * 100;
+
+    return acc;
+};
 
 let TOKEN;
 let cancelFetch = false;
@@ -117,6 +202,15 @@ const getOauthToken = async () => {
     TOKEN = json.access_token;
 };
 
+const testApiKey = async () => {
+    const response = await fetch(`https://osu.ppy.sh/api/get_beatmaps?k=${config.API_KEY}&b=75`);
+    const json = await response.json();
+
+    if (json.error != null) {
+        throw json.error;
+    }
+};
+
 const showApiDetailsDialog = error => {
     const dialog = new QDialog();
     dialog.setObjectName("dialog");
@@ -135,14 +229,12 @@ const showApiDetailsDialog = error => {
     labelInfo.setObjectName('labelInfo');
     
     const rowClientID = new QWidget();
-    const rowClientIDLayout = new FlexLayout();
     rowClientID.setObjectName('rowClientID');
-    rowClientID.setLayout(rowClientIDLayout);
+    rowClientID.setLayout(new FlexLayout());
     
     const rowClientSecret = new QWidget();
-    const rowClientSecretLayout = new FlexLayout();
     rowClientSecret.setObjectName('rowClientSecret');
-    rowClientSecret.setLayout(rowClientSecretLayout);
+    rowClientSecret.setLayout(new FlexLayout());
     
     const labelClientID = new QLabel();
     labelClientID.setObjectName("labelClientID");
@@ -155,8 +247,8 @@ const showApiDetailsDialog = error => {
         inputClientID.setText(config.CLIENT_ID.toString());
     }
     
-    rowClientIDLayout.addWidget(labelClientID);
-    rowClientIDLayout.addWidget(inputClientID);
+    rowClientID.layout.addWidget(labelClientID);
+    rowClientID.layout.addWidget(inputClientID);
     
     const labelClientSecret = new QLabel();
     labelClientSecret.setObjectName("labelClientSecret");
@@ -170,8 +262,27 @@ const showApiDetailsDialog = error => {
         inputClientSecret.setText(config.CLIENT_SECRET.toString());
     }
     
-    rowClientSecretLayout.addWidget(labelClientSecret);
-    rowClientSecretLayout.addWidget(inputClientSecret);
+    rowClientSecret.layout.addWidget(labelClientSecret);
+    rowClientSecret.layout.addWidget(inputClientSecret);
+
+    const rowApiKey = new QWidget();
+    rowApiKey.setObjectName('rowApiKey');
+    rowApiKey.setLayout(new FlexLayout());
+
+    const labelApiKey = new QLabel();
+    labelApiKey.setObjectName("labelApiKey");
+    labelApiKey.setText('API v1 Key: ');
+    
+    const inputApiKey = new QLineEdit();
+    inputApiKey.setObjectName("inputApiKey");
+    inputApiKey.setEchoMode(EchoMode.Password);
+
+    if (config.API_KEY.length > 0) {
+        inputApiKey.setText(config.API_KEY.toString());
+    }
+    
+    rowApiKey.layout.addWidget(labelApiKey);
+    rowApiKey.layout.addWidget(inputApiKey);
     
     const buttonSave = new QPushButton();
     buttonSave.setText('Save');
@@ -180,13 +291,15 @@ const showApiDetailsDialog = error => {
     buttonSave.addEventListener('clicked', async () => {
         config.CLIENT_ID = Number(inputClientID.text());
         config.CLIENT_SECRET = inputClientSecret.text();
-
-        dialog.close();
+        config.API_KEY = inputApiKey.text();
 
         try {
             await getOauthToken();
+            await testApiKey();
             await saveConfig();
+            dialog.close();
         } catch(e) {
+            dialog.close();
             showApiDetailsDialog(e);
         }
     });
@@ -194,6 +307,7 @@ const showApiDetailsDialog = error => {
     dialog.layout.addWidget(labelInfo);
     dialog.layout.addWidget(rowClientID);
     dialog.layout.addWidget(rowClientSecret);
+    dialog.layout.addWidget(rowApiKey);
 
     if (error) {
         const labelErrorMsg = new QLabel();
@@ -213,7 +327,7 @@ const showApiDetailsDialog = error => {
             margin-bottom: 5px;
         }
         
-        #rowClientID, #rowClientSecret {
+        #rowClientID, #rowClientSecret, #rowApiKey {
             flex-direction: row;
         }
 
@@ -221,11 +335,11 @@ const showApiDetailsDialog = error => {
             margin-top: 5px;
         }
         
-        #labelClientID, #labelClientSecret {
+        #labelClientID, #labelClientSecret, #labelApiKey {
             min-width: 80px;
         }
         
-        #inputClientID, #inputClientSecret {
+        #inputClientID, #inputClientSecret, #inputApiKey {
             flex-grow: 1;
         }
         
@@ -242,7 +356,7 @@ const showApiDetailsDialog = error => {
     dialog.layout.setSizeConstraint(nodegui.SizeConstraint.SetFixedSize);
     
     dialog.setWindowTitle("osu! API Credentials");
-    dialog.exec();
+    dialog.open();
 };
 
 const rootView = new QWidget();
@@ -268,6 +382,38 @@ inputUsername.setObjectName("inputUsername");
 usernameRow.layout.addWidget(labelUsername);
 usernameRow.layout.addWidget(inputUsername);
 
+const requestsRow = new QWidget();
+requestsRow.setObjectName('requestsRow');
+requestsRow.setLayout(new FlexLayout());
+
+const labelRequests = new QLabel();
+labelRequests.setText("Requests/min: ");
+labelRequests.setObjectName("labelRequests");
+
+const inputRequests = new QSpinBox();
+inputRequests.setRange(10, 1000);
+inputRequests.setValue(60);
+inputRequests.setObjectName("inputRequests");
+
+requestsRow.layout.addWidget(labelRequests);
+requestsRow.layout.addWidget(inputRequests);
+
+const apiVersionRow = new QWidget();
+apiVersionRow.setObjectName('apiVersionRow');
+apiVersionRow.setLayout(new FlexLayout());
+
+const labelApiVersion = new QLabel();
+labelApiVersion.setText("API Version: ");
+labelApiVersion.setObjectName("labelApiVersion");
+
+const inputApiVersion = new QComboBox();
+inputApiVersion.addItem(undefined, 'v2');
+inputApiVersion.addItem(undefined, 'v1');
+inputRequests.setObjectName("inputApiVersion");
+
+apiVersionRow.layout.addWidget(labelApiVersion);
+apiVersionRow.layout.addWidget(inputApiVersion);
+
 const buttonsRow = new QWidget();
 buttonsRow.setObjectName('buttonsRow');
 buttonsRow.setLayout(new FlexLayout());
@@ -285,6 +431,8 @@ buttonsRow.layout.addWidget(buttonCancel);
 buttonsRow.layout.addWidget(buttonFetch);
 
 fieldset.layout.addWidget(usernameRow);
+fieldset.layout.addWidget(requestsRow);
+fieldset.layout.addWidget(apiVersionRow);
 fieldset.layout.addWidget(buttonsRow);
 
 const progress = new QProgressBar();
@@ -339,11 +487,19 @@ const rootStyleSheet = `
     padding: 5px;
   }
   
-  #usernameRow, #buttonsRow, #exportButtonsRow {
+  #usernameRow, #buttonsRow, #exportButtonsRow, #requestsRow, #apiVersionRow {
     flex-direction: row;
   }
 
-  #usernameRow, #buttonsRow {
+  #labelUsername, #labelRequests, #labelApiVersion {
+    width: 100px;
+  }
+
+  #inputUsername, #inputRequests, #inputApiVersion {
+    flex-grow: 1;
+  }
+
+  #apiVersionRow, #buttonsRow {
     margin-bottom: 10px;
   }
 
@@ -357,10 +513,6 @@ const rootStyleSheet = `
 
   #buttonCancel, #buttonSave, #buttonExportCsv, #buttonExportJson {
     flex-grow: 1;
-  }
-
-  #inputUsername {
-      flex-grow: 1;
   }
 `;
 
@@ -387,7 +539,7 @@ buttonFetch.addEventListener('clicked', async () => {
         return;
     }
 
-    const { id } = user;
+    const userId = user.id;
 
     const beatmapIds = [];
     const limit = 50;
@@ -403,8 +555,10 @@ buttonFetch.addEventListener('clicked', async () => {
         beatmapsError = null;
 
         do{
+            const timeStart = Date.now();
+
             try{
-                beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${id}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
+                beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${userId}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
 
                 if (beatmaps.error) {
                     beatmapsError = beatmaps.error;
@@ -417,7 +571,14 @@ buttonFetch.addEventListener('clicked', async () => {
                 beatmapsError = e.toString();
             }
 
-            await sleep(WAIT_TIME);
+            const timeTaken = Date.now() - timeStart;
+            const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
+
+            if (sleepTime > 0) {
+                await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
+            }
+
+            await sleep(config.WAIT_TIME);
         }while(!Array.isArray(beatmaps) || beatmapsError != null);
 
         beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
@@ -446,22 +607,76 @@ buttonFetch.addEventListener('clicked', async () => {
             break;
         }
 
-        do{
-            try{
-                score = await apiRequest(`https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/scores/users/${id}`);
+        if (inputApiVersion.currentText() == 'v2') {
+            do{
+                const timeStart = Date.now();
 
-                if (score.error) {
-                    console.error(score.error);
+                try {
+                    score = await apiRequest(`https://osu.ppy.sh/api/v2/beatmaps/${beatmapId}/scores/users/${userId}`);
+
+                    if (score.error) {
+                        console.error(score.error);
+                    }
+                } catch(e) {
+                    console.error(e);
+
+                    score.error = e.toString();
                 }
-            }catch(e){
-                console.error(e);
 
-                score.error = e.toString();
+                const timeTaken = Date.now() - timeStart;
+                const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
+
+                if (sleepTime > 0) {
+                    await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
+                }
+            }while(score.error != null);
+        
+            if (score.score != null) {
+                score.score.enabled_mods = modsArrayToEnum(score.score.mods);
             }
 
-            await sleep(WAIT_TIME);
-        }while(score.error != null);
-        
+            score.apiVersion = 2;
+        } else {
+            do{
+                const timeStart = Date.now();
+
+                try {
+                    const response = await Promise.all([
+                        fetch(`https://osu.ppy.sh/api/get_scores?k=${config.API_KEY}&b=${beatmapId}&u=${userId}&limit=1`),
+                        fetch(`${config.BEATMAP_API_BASE}/b/${beatmapId}`)
+                    ]);
+
+                    score = {};
+
+                    const scoreJson = await response[0].json();
+                    const beatmapJson = await response[1].json();
+
+                    score.score = scoreJson[0];
+
+                    if (Array.isArray(scoreJson) && scoreJson.length > 0) {
+                        score.score.beatmap = beatmapJson.beatmap;
+                    }
+                } catch(e) {
+                    console.error(e);
+
+                    score.error = e.toString();
+                }
+
+                const timeTaken = Date.now() - timeStart;
+                const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
+
+                if (sleepTime > 0) {
+                    await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
+                }
+            }while(score.error != null);
+
+            if (score.score != null) {
+                score.score.mods = modsEnumToArray(Number(score.score.enabled_mods));
+            }
+
+            score.apiVersion = 1;
+        }
+
         if (cancelFetch) {
             break;
         }
@@ -470,6 +685,7 @@ buttonFetch.addEventListener('clicked', async () => {
             scores.push(score);
         }
 
+        progress.setFormat(`${scores.length.toLocaleString()} / ${beatmapIds.length.toLocaleString()} beatmaps`);
         progress.setValue(index + 1);
     }
 
@@ -480,63 +696,128 @@ buttonFetch.addEventListener('clicked', async () => {
 const getColumn = (column, scoreEntry) => {
     const { score } = scoreEntry;
 
-    switch(column){
-        case 'Date':
-            return score.created_at;
-        case 'Score ID':
-            return score.id;
-        case 'User ID':
-            return score.user_id;
-        case 'Beatmapset ID':
-            return score.beatmap.beatmapset_id;
-        case 'Beatmap ID':
-            return score.beatmap.id;
-        case 'Ranked State':
-            return score.beatmap.status;
-        case 'AR':
-            return score.beatmap.ar;
-        case 'CS':
-            return score.beatmap.cs;
-        case 'OD':
-            return score.beatmap.accuracy;
-        case 'HP':
-            return score.beatmap.drain;
-        case 'BPM':
-            return score.beatmap.bpm;
-        case 'Version':
-            return score.beatmap.version;
-        case 'Hit Length':
-            return score.beatmap.hit_length;
-        case 'Star Rating':
-            return score.beatmap.difficulty_rating;
-        case 'Mods':
-            return score.mods.join(",");
-        case 'Rank':
-            return score.rank;
-        case 'Position':
-            return scoreEntry.position;
-        case 'Score':
-            return score.score;
-        case 'Combo':
-            return score.max_combo;
-        case 'FC':
-            return score.perfect;
-        case 'Accuracy':
-            return `${(score.accuracy * 100).toFixed(2)}%`;
-        case '300':
-            return score.statistics.count_300;
-        case '100':
-            return score.statistics.count_100;
-        case '50':
-            return score.statistics.count_50;
-        case 'Miss':
-            return score.statistics.count_miss;
-        case 'PP':
-            return score.pp;
-        case 'Replay':
-            return score.replay;
-        default:
-            return '';
+    if (scoreEntry.apiVersion == 1) {
+        switch(column){
+            case 'Date':
+                return score.date;
+            case 'Score ID':
+                return score.score_id;
+            case 'User ID':
+                return score.user_id;
+            case 'Beatmapset ID':
+                return score.beatmap.beatmapset_id;
+            case 'Beatmap ID':
+                return score.beatmap.beatmap_id;
+            case 'Ranked State':
+                return RANKED_STATE[score.beatmap.approved];
+            case 'AR':
+                return score.beatmap.ar;
+            case 'CS':
+                return score.beatmap.cs;
+            case 'OD':
+                return score.beatmap.od;
+            case 'HP':
+                return score.beatmap.hp;
+            case 'BPM':
+                return score.beatmap.bpm;
+            case 'Version':
+                return score.beatmap.version;
+            case 'Hit Length':
+                return score.beatmap.hit_length;
+            case 'Star Rating':
+                return score.beatmap.star_rating;
+            case 'Mods Array':
+                return score.mods.join("");
+            case 'Mods Enum':
+                return score.enabled_mods;
+            case 'Rank':
+                return score.rank;
+            case 'Position':
+                return 0;
+            case 'Score':
+                return score.score;
+            case 'Combo':
+                return score.maxcombo;
+            case 'FC':
+                return score.perfect == "1";
+            case 'Accuracy':
+                return `${accuracy(score.count50, score.count100, score.count300, score.countmiss).toFixed(2)}%`;
+            case '300':
+                return score.count300;
+            case '100':
+                return score.count100;
+            case '50':
+                return score.count50;
+            case 'Miss':
+                return score.countmiss;
+            case 'PP':
+                return score.pp;
+            case 'Replay':
+                return score.replay == "1";
+            default:
+                return '';
+        }
+    } else {
+        switch(column){
+            case 'Date':
+                return score.created_at;
+            case 'Score ID':
+                return score.id;
+            case 'User ID':
+                return score.user_id;
+            case 'Beatmapset ID':
+                return score.beatmap.beatmapset_id;
+            case 'Beatmap ID':
+                return score.beatmap.id;
+            case 'Ranked State':
+                return score.beatmap.status;
+            case 'AR':
+                return score.beatmap.ar;
+            case 'CS':
+                return score.beatmap.cs;
+            case 'OD':
+                return score.beatmap.accuracy;
+            case 'HP':
+                return score.beatmap.drain;
+            case 'BPM':
+                return score.beatmap.bpm;
+            case 'Version':
+                return score.beatmap.version;
+            case 'Hit Length':
+                return score.beatmap.hit_length;
+            case 'Star Rating':
+                return score.beatmap.difficulty_rating;
+            case 'Mods Array':
+                return score.mods.join("");
+            case 'Mods Enum':
+                return score.enabled_mods;
+            case 'Rank':
+                return score.rank;
+            case 'Position':
+                return scoreEntry.position;
+            case 'Score':
+                return score.score;
+            case 'Combo':
+                return score.max_combo;
+            case 'FC':
+                return score.perfect;
+            case 'Accuracy':
+                return `${(score.accuracy * 100).toFixed(2)}%`;
+            case '300':
+                return score.statistics.count_300;
+            case '100':
+                return score.statistics.count_100;
+            case '50':
+                return score.statistics.count_50;
+            case 'Miss':
+                return score.statistics.count_miss;
+            case 'PP':
+                return score.pp;
+            case 'Replay':
+                return score.replay;
+            default:
+                return '';
+        }
     }
 }
 
@@ -546,34 +827,36 @@ buttonExportCsv.addEventListener('clicked', async () => {
     fileDialog.setFileMode(FileMode.AnyFile);
     fileDialog.setNameFilter('CSV (*.csv)');
     fileDialog.setDefaultSuffix('.csv');
-    fileDialog.exec();
+    fileDialog.show();
 
-    const selectedFiles = fileDialog.selectedFiles();
-    const outputPath = selectedFiles[0];
+    fileDialog.addEventListener('fileSelected', async () => {
+        const selectedFiles = fileDialog.selectedFiles();
+        const outputPath = selectedFiles[0];
 
-    const exportColumns = [];
+        const exportColumns = [];
 
-    for (const item of listExportColumns.items) {
-        if (item.checkState() > 0) {
-            exportColumns.push(item.text());
-        }
-    }
-
-    let output = exportColumns.join(",");
-
-    for (const scoreEntry of scores) {
-        output += '\r\n';
-
-        for (const [index, column] of exportColumns.entries()) {
-            output += getColumn(column, scoreEntry);
-
-            if (index < exportColumns.length - 1) {
-                output += ',';
+        for (const item of listExportColumns.items) {
+            if (item.checkState() > 0) {
+                exportColumns.push(item.text());
             }
         }
-    }
 
-    await fs.writeFile(outputPath, output);
+        let output = exportColumns.join(",");
+
+        for (const scoreEntry of scores) {
+            output += '\r\n';
+
+            for (const [index, column] of exportColumns.entries()) {
+                output += getColumn(column, scoreEntry);
+
+                if (index < exportColumns.length - 1) {
+                    output += ',';
+                }
+            }
+        }
+
+        await fs.writeFile(outputPath, output);
+    });
 });
 
 buttonExportJson.addEventListener('clicked', async () => {
@@ -582,12 +865,14 @@ buttonExportJson.addEventListener('clicked', async () => {
     fileDialog.setFileMode(FileMode.AnyFile);
     fileDialog.setNameFilter('JSON (*.json)');
     fileDialog.setDefaultSuffix('.json');
-    fileDialog.exec();
+    fileDialog.show();
 
-    const selectedFiles = fileDialog.selectedFiles();
-    const outputPath = selectedFiles[0];
+    fileDialog.addEventListener('fileSelected', async () => {
+        const selectedFiles = fileDialog.selectedFiles();
+        const outputPath = selectedFiles[0];
 
-    await fs.writeFile(outputPath, JSON.stringify(scores, null, 2));
+        await fs.writeFile(outputPath, JSON.stringify(scores, null, 2));
+    });
 });
 
 rootView.setStyleSheet(rootStyleSheet);
@@ -600,16 +885,14 @@ win.show();
 fs.readFile('./config.json', 'utf8')
 .then(configFile => {
     Object.assign(config, JSON.parse(configFile));
-
-    if (!isNaN(config.WAIT_TIME)) {
-        WAIT_TIME = config.WAIT_TIME;
-    }
 }).catch(error => {
     console.error(error);
 
     saveConfig().catch(console.error);
 }).finally(() => {
-    getOauthToken().catch(showApiDetailsDialog);
+    testApiKey().then(() => {
+        getOauthToken().catch(showApiDetailsDialog);
+    }).catch(showApiDetailsDialog);
 });
 
 global.win = win;
