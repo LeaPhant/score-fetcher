@@ -1,7 +1,7 @@
 # score-fetcher
 Qt-based cross platform application to fetch all osu! scores by a user
 
-![Screenshot](https://i.imgur.com/k7lWVZU.png)
+![Screenshot](https://i.imgur.com/IzZ1E4b.png)
 
 ### Prerequisites
 - Node.js
