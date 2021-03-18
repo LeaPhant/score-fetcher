@@ -4,8 +4,9 @@ Qt-based cross platform application to fetch all osu! scores by a user
 ![Screenshot](https://i.imgur.com/IzZ1E4b.png)
 
 ### Prerequisites
-- Node.js
-- osu! account
+- Node.js (https://nodejs.org)
+- CMake (https://cmake.org/download)
+- osu! account (https://osu.ppy.sh)
 
 ### Setup
 ```Bash
