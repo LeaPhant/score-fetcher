@@ -519,6 +519,8 @@ buttonFetch.addEventListener('clicked', async () => {
     buttonFetch.setEnabled(false);
     buttonCancel.setEnabled(true);
 
+    progress.setValue(0);
+
     let user;
 
     try{
