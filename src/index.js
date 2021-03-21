@@ -401,6 +401,23 @@ inputRequests.setObjectName("inputApiVersion");
 apiVersionRow.layout.addWidget(labelApiVersion);
 apiVersionRow.layout.addWidget(inputApiVersion);
 
+const mapsCheckRow = new QWidget();
+mapsCheckRow.setObjectName('mapsCheckRow');
+mapsCheckRow.setLayout(new FlexLayout());
+
+const labelMapsCheck = new QLabel();
+labelMapsCheck.setText("Maps to check: ");
+labelMapsCheck.setObjectName("labelMapsCheck");
+
+const inputMapsCheck = new QComboBox();
+inputMapsCheck.addItem(undefined, 'Played');
+inputMapsCheck.addItem(undefined, 'All Ranked & Loved');
+inputMapsCheck.addItem(undefined, 'All Ranked');
+inputMapsCheck.setObjectName("inputMapsCheck");
+
+mapsCheckRow.layout.addWidget(labelMapsCheck);
+mapsCheckRow.layout.addWidget(inputMapsCheck);
+
 const buttonsRow = new QWidget();
 buttonsRow.setObjectName('buttonsRow');
 buttonsRow.setLayout(new FlexLayout());
@@ -420,6 +437,7 @@ buttonsRow.layout.addWidget(buttonFetch);
 fieldset.layout.addWidget(usernameRow);
 fieldset.layout.addWidget(requestsRow);
 fieldset.layout.addWidget(apiVersionRow);
+fieldset.layout.addWidget(mapsCheckRow);
 fieldset.layout.addWidget(buttonsRow);
 
 const progress = new QProgressBar();
@@ -478,19 +496,19 @@ const rootStyleSheet = `
     flex-shrink: 1;
   }
   
-  #usernameRow, #buttonsRow, #exportButtonsRow, #requestsRow, #apiVersionRow {
+  #usernameRow, #buttonsRow, #exportButtonsRow, #requestsRow, #apiVersionRow, #mapsCheckRow {
     flex-direction: row;
   }
 
-  #labelUsername, #labelRequests, #labelApiVersion {
+  #labelUsername, #labelRequests, #labelApiVersion, #labelMapsCheck {
     width: 100px;
   }
 
-  #inputUsername, #inputRequests, #inputApiVersion {
+  #inputUsername, #inputRequests, #inputApiVersion, #inputMapsCheck {
     flex-grow: 1;
   }
 
-  #apiVersionRow, #buttonsRow {
+  #mapsCheckRow, #buttonsRow {
     margin-bottom: 10px;
   }
 
@@ -542,46 +560,57 @@ buttonFetch.addEventListener('clicked', async () => {
     let offset = 0;
     let beatmaps, beatmapsError;
 
-    do{
-        if (cancelFetch) {
-            break;
-        }
-
-        beatmapsError = null;
-
+    if (inputMapsCheck.currentText() == 'Played') {
         do{
-            const timeStart = Date.now();
+            if (cancelFetch) {
+                break;
+            }
 
-            try{
-                beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${userId}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
+            beatmapsError = null;
 
-                if (beatmaps.error) {
-                    beatmapsError = beatmaps.error;
+            do{
+                const timeStart = Date.now();
 
-                    console.error(beatmaps.error);
+                try{
+                    beatmaps = await apiRequest(`https://osu.ppy.sh/api/v2/users/${userId}/beatmapsets/most_played?limit=${limit}&offset=${offset}`);
+
+                    if (beatmaps.error) {
+                        beatmapsError = beatmaps.error;
+
+                        console.error(beatmaps.error);
+                    }
+                }catch(e){
+                    console.error(e);
+                    
+                    beatmapsError = e.toString();
                 }
-            }catch(e){
-                console.error(e);
-                
-                beatmapsError = e.toString();
-            }
 
-            const timeTaken = Date.now() - timeStart;
-            const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
+                const timeTaken = Date.now() - timeStart;
+                const sleepTime = Math.max(0, 60000 / inputRequests.value() - timeTaken);
 
-            if (sleepTime > 0) {
-                await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
-            }
+                if (sleepTime > 0) {
+                    await sleep(Math.max(0, 60000 / inputRequests.value() - timeTaken));
+                }
 
-            await sleep(config.WAIT_TIME);
-        }while(!Array.isArray(beatmaps) || beatmapsError != null);
+                await sleep(config.WAIT_TIME);
+            }while(!Array.isArray(beatmaps) || beatmapsError != null);
 
-        beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
+            beatmapIds.push(...beatmaps.map(a => a.beatmap_id));
 
-        offset += limit;
+            offset += limit;
 
-        progress.setFormat(`0 / ${beatmapIds.length.toLocaleString()} beatmaps`);
-    }while(beatmaps.length > 0);
+            progress.setFormat(`0 / ${beatmapIds.length.toLocaleString()} beatmaps`);
+        }while(beatmaps.length > 0);
+    } else if (inputMapsCheck.currentText().startsWith('All Ranked')) {
+        const response = await fetch(`${config.BEATMAP_API_BASE}/beatmaps`);
+        const json = await response.json();
+
+        beatmapIds.push(...json.ranked.beatmaps);
+
+        if (inputMapsCheck.currentText().startsWith('All Ranked & Loved')) {
+            beatmapIds.push(...json.loved.beatmaps);
+        }
+    }
 
     if (!cancelFetch) {
         progress.setFormat(`%v / ${beatmapIds.length.toLocaleString()} beatmaps`);
