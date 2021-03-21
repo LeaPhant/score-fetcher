@@ -1,10 +1,5 @@
-import nodegui from '@nodegui/nodegui';
-import nodeFetch from 'node-fetch';
-import { promises as fs } from 'fs';
-
-import fetchRetry from '@vercel/fetch-retry';
-
-const fetch = fetchRetry(nodeFetch);
+const fs = require('fs').promises;
+const fetch = require('@vercel/fetch-retry')(require('node-fetch'))
 
 const { 
     QMainWindow,
@@ -25,7 +20,7 @@ const {
     QSpinBox,
     FileMode,
     EchoMode
-} = nodegui;
+} = require('@nodegui/nodegui');
 
 const config = {
     CLIENT_ID: 0,

@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "fetch user scores and output as json or csv",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "npx qode ./src/index",
     "debug": "npx qode --inspect ./src/index",
