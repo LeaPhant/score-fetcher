@@ -19,7 +19,8 @@ const {
     QFileDialog,
     QSpinBox,
     FileMode,
-    EchoMode
+    EchoMode,
+    SizeConstraint
 } = require('@nodegui/nodegui');
 
 const config = {
@@ -335,7 +336,7 @@ const showApiDetailsDialog = error => {
         }
     `);
 
-    dialog.layout.setSizeConstraint(nodegui.SizeConstraint.SetFixedSize);
+    dialog.layout.setSizeConstraint(SizeConstraint.SetFixedSize);
     
     dialog.setWindowTitle("osu! API Credentials");
     dialog.open();
